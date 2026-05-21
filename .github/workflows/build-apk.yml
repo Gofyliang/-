@@ -69,8 +69,27 @@ jobs:
           python3 --version
           which buildozer
           buildozer --version
+
+          # 第一次编译：下载SDK/NDK，可能卡在许可证
+          set +o pipefail
           buildozer android debug 2>&1 | tee buildozer.log
-          echo "EXIT_CODE=$?" >> $GITHUB_OUTPUT
+          BUILD_EXIT=$?
+          set -o pipefail
+
+          # 如果失败，手动接受SDK许可后重试
+          if [ $BUILD_EXIT -ne 0 ]; then
+            echo "=== 首次编译失败（exit=$BUILD_EXIT），尝试接受SDK许可 ==="
+            SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
+            if [ -f "$SDK_ROOT/tools/bin/sdkmanager" ]; then
+              echo "正在接受所有SDK许可..."
+              yes | $SDK_ROOT/tools/bin/sdkmanager --licenses --sdk_root="$SDK_ROOT" 2>&1
+              echo "=== 重新编译 ==="
+              buildozer android debug 2>&1 | tee -a buildozer.log
+              BUILD_EXIT=$?
+            fi
+          fi
+          echo "BUILD_EXIT=$BUILD_EXIT" >> $GITHUB_OUTPUT
+          exit $BUILD_EXIT
         shell: bash
 
       - name: Upload build log
