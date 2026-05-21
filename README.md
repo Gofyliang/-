@@ -1,2 +1,2 @@
 # -
-countdown wheel that use in Toastmaster.
+countdown wheel that use in Toastmasters. 
