@@ -4,12 +4,12 @@ on:
     branches:
       - main
       - master
-  workflow_dispatch:  # 支持手动触发
+  workflow_dispatch:
 
 jobs:
   build-android:
     name: Build Android APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 60
 
     steps:
@@ -53,9 +53,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.buildozer
-          key: buildozer-cache-v2-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          key: buildozer-cache-v3-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
           restore-keys: |
-            buildozer-cache-v2-${{ runner.os }}-
+            buildozer-cache-v3-${{ runner.os }}-
 
       - name: Build APK
         run: |
@@ -63,10 +63,7 @@ jobs:
           export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
           echo "JAVA_HOME=$JAVA_HOME"
           java -version
-          # 接受 Android SDK 许可
-          yes | $HOME/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
-          buildozer android debug --verbose 2>&1 | tee buildozer.log
-        shell: bash
+          buildozer android debug
 
       - name: Find APK
         id: find_apk
