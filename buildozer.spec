@@ -50,6 +50,8 @@ builddir = ./build
 buildozer.bin = buildozer
 
 # 跳过 Android SDK/NDK 自动下载（如果本机已有）
+# 自动接受Android SDK许可
+android.accept_sdk_license = True
 # android.sdk_path = 
 # android.ndk_path = 
 
