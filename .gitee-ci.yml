@@ -1,0 +1,50 @@
+# Gitee Go 流水线配置 - 编译 Kivy 倒计时轮盘 APK
+# 文档：https://gitee.com/help/articles/4292
+
+image: ubuntu:22.04
+
+# 构建前：安装系统依赖和 buildozer
+before_script:
+  - export DEBIAN_FRONTEND=noninteractive
+  - apt-get update -qq
+  - apt-get install -y -qq
+    python3
+    python3-pip
+    python3-dev
+    git
+    autoconf
+    automake
+    build-essential
+    cmake
+    libffi-dev
+    libltdl-dev
+    libncurses-dev
+    libssl-dev
+    libtool
+    openjdk-17-jdk
+    patch
+    pkg-config
+    unzip
+    zip
+    zlib1g-dev
+    ccache
+  - pip3 install --upgrade pip setuptools wheel
+  - pip3 install buildozer cython
+  - buildozer --version
+
+# 主构建脚本
+script:
+  - buildozer android debug
+
+# 构建后：显示 APK 位置
+after_script:
+  - echo "=== 查找 APK 文件 ==="
+  - find . -name "*.apk" -type f -exec ls -lh {} \; 2>/dev/null || echo "未找到 APK"
+  - echo "=== 构建完成 ==="
+
+# 缓存 .buildozer 目录（SDK/NDK 等，避免每次重新下载）
+cache:
+  paths:
+    - .buildozer/
+    - ~/.buildozer/
+    - ~/.cache/pip/
