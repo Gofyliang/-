@@ -58,15 +58,31 @@ jobs:
             buildozer-cache-v3-${{ runner.os }}-
 
       - name: Build APK
+        id: build
         run: |
+          set -x
           export PATH="$HOME/.local/bin:$PATH"
           export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
           echo "JAVA_HOME=$JAVA_HOME"
           java -version
-          buildozer android debug
+          which python3
+          python3 --version
+          which buildozer
+          buildozer --version
+          buildozer android debug 2>&1 | tee buildozer.log
+          echo "EXIT_CODE=$?" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.run_number }}
+          path: buildozer.log
 
       - name: Find APK
         id: find_apk
+        if: success()
         run: |
           APK_PATH=$(find . -name "*.apk" -not -path "*/.buildozer/*" | head -1)
           if [ -z "$APK_PATH" ]; then
@@ -79,6 +95,7 @@ jobs:
           ls -lh "$APK_PATH"
 
       - name: Upload APK artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: 倒计时轮盘-APK
