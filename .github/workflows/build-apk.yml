@@ -24,20 +24,17 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq \
+          sudo apt-get install -y -qq --fix-missing \
             autoconf \
             automake \
             build-essential \
-            ccache \
             cmake \
-            gettext \
             git \
             libffi-dev \
             libltdl-dev \
-            libncurses5 \
+            libncurses-dev \
             libssl-dev \
             libtool \
-            lld \
             openjdk-17-jdk \
             patch \
             pkg-config \
