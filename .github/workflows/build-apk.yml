@@ -60,7 +60,13 @@ jobs:
       - name: Build APK
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          buildozer android debug
+          export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+          echo "JAVA_HOME=$JAVA_HOME"
+          java -version
+          # 接受 Android SDK 许可
+          yes | $HOME/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+          buildozer android debug --verbose 2>&1 | tee buildozer.log
+        shell: bash
 
       - name: Find APK
         id: find_apk
