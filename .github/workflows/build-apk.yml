@@ -64,6 +64,20 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 
+          # 修复：NDK r28c 与 SDL2 不兼容，降级为 r25c
+          NDK_DIR="$HOME/.buildozer/android/platform/android-ndk-r25c"
+          if [ ! -d "$NDK_DIR" ]; then
+            echo "=== 下载 NDK r25c（替换默认 r28c）==="
+            wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip -O /tmp/ndk.zip
+            mkdir -p "$HOME/.buildozer/android/platform"
+            unzip -q /tmp/ndk.zip -d "$HOME/.buildozer/android/platform"
+            rm /tmp/ndk.zip
+          fi
+          # 删除 r28c 避免被误用
+          rm -rf "$HOME/.buildozer/android/platform/android-ndk-r28c" 2>/dev/null || true
+          # 让 buildozer 找到 r25c
+          export ANDROID_NDK_HOME="$NDK_DIR"
+
           # 第一次编译（下载SDK/NDK，许可可能未被接受）
           set +o pipefail
           buildozer android debug 2>&1 | tee buildozer.log
