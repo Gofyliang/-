@@ -24,7 +24,7 @@ fullscreen = 0
 
 # 权限
 android.permissions = VIBRATE,WAKE_LOCK
-android.features = 
+# android.features = 
 
 # Android API 版本
 android.api = 30
