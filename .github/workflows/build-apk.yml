@@ -10,33 +10,76 @@ jobs:
   build-android:
     name: Build Android APK
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Cache Buildozer global directory
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            autoconf \
+            automake \
+            build-essential \
+            ccache \
+            cmake \
+            gettext \
+            git \
+            libffi-dev \
+            libltdl-dev \
+            libncurses5 \
+            libssl-dev \
+            libtool \
+            lld \
+            openjdk-17-jdk \
+            patch \
+            pkg-config \
+            python3-dev \
+            unzip \
+            zip \
+            zlib1g-dev
+
+      - name: Install Python packages
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install cython
+          pip install buildozer
+
+      - name: Cache .buildozer
         uses: actions/cache@v4
         with:
-          path: .buildozer_global
-          key: buildozer-global-${{ hashFiles('buildozer.spec') }}
+          path: ~/.buildozer
+          key: buildozer-cache-v2-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-cache-v2-${{ runner.os }}-
 
-      - name: Build with Buildozer
-        uses: ArtemSBulgakov/buildozer-action@v1
-        id: buildozer
-        with:
-          command: buildozer android debug
-          workdir: .
-          buildozer_version: stable
+      - name: Build APK
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          buildozer android debug
+
+      - name: Find APK
+        id: find_apk
+        run: |
+          APK_PATH=$(find . -name "*.apk" -not -path "*/.buildozer/*" | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "ERROR: No APK found!"
+            find . -name "*.apk" 2>/dev/null || echo "No APK anywhere"
+            exit 1
+          fi
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+          echo "APK found: $APK_PATH"
+          ls -lh "$APK_PATH"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: 倒计时轮盘-APK
-          path: ${{ steps.buildozer.outputs.filename }}
-
-      - name: Show APK info
-        run: |
-          echo "APK 已生成！"
-          echo "文件路径: ${{ steps.buildozer.outputs.filename }}"
-          ls -lh ${{ steps.buildozer.outputs.filename }}
+          path: ${{ steps.find_apk.outputs.apk_path }}
