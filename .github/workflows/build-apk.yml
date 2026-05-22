@@ -46,16 +46,15 @@ jobs:
       - name: Install Python packages
         run: |
           pip install --upgrade pip setuptools wheel
-          pip install "cython<3.0"
           pip install buildozer
 
       - name: Cache .buildozer
         uses: actions/cache@v4
         with:
           path: ~/.buildozer
-          key: buildozer-cache-v4-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          key: buildozer-cache-v5-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
           restore-keys: |
-            buildozer-cache-v4-${{ runner.os }}-
+            buildozer-cache-v5-${{ runner.os }}-
 
       - name: Build APK
         id: build
@@ -80,10 +79,12 @@ jobs:
           echo "=== NDK 链接创建完成 ==="
           ls -la "$HOME/.buildozer/android/platform/" | grep ndk
 
-          # 清理 buildozer 缓存，避免旧编译产物导致 Cython/Kivy 编译失败
-          echo "=== 清理 buildozer 缓存 ==="
-          rm -rf "$HOME/.buildozer/android/platform/build-arm64-v8a_armeabi-v7a" 2>/dev/null || true
-          rm -rf "$HOME/.buildozer/android/app" 2>/dev/null || true
+          # 彻底清理旧缓存，确保 p4a develop 分支和 cython<3.0 生效
+          echo "=== 彻底清理编译缓存 ==="
+          rm -rf "$HOME/.buildozer/android/platform/build-"* 2>/dev/null || true
+          rm -rf "$HOME/.buildozer/android/platform/python-for-android" 2>/dev/null || true
+          rm -rf ./.buildozer 2>/dev/null || true
+          echo "=== 缓存清理完成 ==="
 
           # 第一次编译（下载SDK/NDK，许可可能未被接受）
           set +o pipefail
