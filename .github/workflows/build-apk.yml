@@ -46,16 +46,16 @@ jobs:
       - name: Install Python packages
         run: |
           pip install --upgrade pip setuptools wheel
-          pip install cython
+          pip install "cython<3.0"
           pip install buildozer
 
       - name: Cache .buildozer
         uses: actions/cache@v4
         with:
           path: ~/.buildozer
-          key: buildozer-cache-v3-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          key: buildozer-cache-v4-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
           restore-keys: |
-            buildozer-cache-v3-${{ runner.os }}-
+            buildozer-cache-v4-${{ runner.os }}-
 
       - name: Build APK
         id: build
@@ -79,6 +79,11 @@ jobs:
           ln -s "$NDK25" "$NDK28"
           echo "=== NDK 链接创建完成 ==="
           ls -la "$HOME/.buildozer/android/platform/" | grep ndk
+
+          # 清理 buildozer 缓存，避免旧编译产物导致 Cython/Kivy 编译失败
+          echo "=== 清理 buildozer 缓存 ==="
+          rm -rf "$HOME/.buildozer/android/platform/build-arm64-v8a_armeabi-v7a" 2>/dev/null || true
+          rm -rf "$HOME/.buildozer/android/app" 2>/dev/null || true
 
           # 第一次编译（下载SDK/NDK，许可可能未被接受）
           set +o pipefail
