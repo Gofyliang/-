@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>倒计时轮盘（带声音）</title>
+<style>
+  /* ========== 全局重置与基础样式 ========== */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: #000;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ========== 16:9 视口容器（letterbox + 拖拽调整大小） ========== */
+  .viewport {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: #0a0a1a;
+    transition: background 1s ease;
+    overflow: hidden;
+  }
+
+  /* ========== 内部1920x1080设计画布 ========== */
+  .canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1920px;
+    height: 1080px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transform-origin: top left;
+  }
+
+  /* ========== 标题 ========== */
+  .title {
+    font-size: 52px;
+    font-weight: 300;
+    letter-spacing: 0.3em;
+    color: #8888aa;
+    margin-bottom: 30px;
+    text-transform: uppercase;
+  }
+
+  /* ========== 轮盘容器 ========== */
+  .clock-container {
+    position: relative;
+    width: 680px;
+    height: 680px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* SVG 进度环 - transform 由 JS 动态设置 */
+  .progress-ring {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.25s linear;
+  }
+
+  .progress-ring__bg {
+    fill: none;
+    stroke: #1e1e3a;
+    stroke-width: 12;
+  }
+
+  .progress-ring__fg {
+    fill: none;
+    stroke: #00FF00;
+    stroke-width: 12;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.25s linear, stroke 0.5s ease;
+    filter: drop-shadow(0 0 8px currentColor);
+  }
+
+  /* ========== 中心信息区 ========== */
+  .center-info {
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .overtime-label {
+    display: none;
+    font-size: 42px;
+    font-weight: 700;
+    color: #FFFF00;
+    text-shadow: 0 0 20px rgba(255, 255, 0, 0.6), 0 0 40px rgba(255, 255, 0, 0.3);
+    animation: overtimePulse 0.6s ease-in-out infinite alternate;
+    letter-spacing: 0.15em;
+    margin-bottom: 4px;
+  }
+
+  .overtime-label.show {
+    display: block;
+  }
+
+  @keyframes overtimePulse {
+    from { opacity: 1; transform: scale(1); }
+    to   { opacity: 0.7; transform: scale(1.05); }
+  }
+
+  /* ========== 中心时间显示 ========== */
+  .time-display {
+    font-size: 160px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.05em;
+    color: #ffffff;
+    transition: color 0.3s;
+    text-shadow: 0 0 30px rgba(255,255,255,0.15);
+  }
+
+  /* 最后10秒闪烁 */
+  .time-display.flash {
+    animation: flashText 0.5s ease-in-out infinite alternate;
+  }
+  @keyframes flashText {
+    from { color: #ffffff; opacity: 1; }
+    to   { color: #FF0000; opacity: 0.6; }
+  }
+
+  /* 时间到了 / 超时 */
+  .time-display.done {
+    color: #FF0000;
+    animation: pulse 0.6s ease-in-out infinite alternate;
+  }
+  @keyframes pulse {
+    from { transform: scale(1); }
+    to   { transform: scale(1.08); }
+  }
+
+  /* ========== 控制面板 ========== */
+  .controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    margin-top: 40px;
+  }
+
+  /* 时间设置行 */
+  .time-set-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 24px;
+    color: #9999bb;
+  }
+
+  .time-set-row label {
+    font-weight: 500;
+  }
+
+  .time-input {
+    width: 100px;
+    padding: 10px 12px;
+    border: 1px solid #333366;
+    border-radius: 8px;
+    background: #12122a;
+    color: #e0e0e0;
+    font-size: 26px;
+    text-align: center;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .time-input:focus {
+    border-color: #5566cc;
+  }
+
+  /* 预设按钮行 */
+  .presets {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .preset-btn {
+    padding: 10px 28px;
+    border: 1px solid #333366;
+    border-radius: 20px;
+    background: transparent;
+    color: #8888bb;
+    font-size: 22px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .preset-btn:hover {
+    background: #22224a;
+    color: #aaaadd;
+    border-color: #5566cc;
+  }
+
+  /* ========== 声音开关按钮 ========== */
+  .sound-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sound-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border: 1px solid #444477;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.25s;
+    color: #8888bb;
+  }
+  .sound-btn:hover {
+    background: #22224a;
+    border-color: #5566cc;
+    color: #aaaadd;
+  }
+  .sound-btn:active {
+    transform: scale(0.92);
+    background: #33335a;
+  }
+
+  /* 声音开启状态 */
+  .sound-btn.sound-on .sound-icon-on  { display: block; }
+  .sound-btn.sound-on .sound-icon-off { display: none; }
+  .sound-btn.sound-on {
+    color: #00CC66;
+    border-color: #00CC66;
+    box-shadow: 0 0 12px rgba(0, 204, 102, 0.25);
+  }
+  .sound-btn.sound-on:hover {
+    color: #00FF80;
+    border-color: #00FF80;
+    box-shadow: 0 0 18px rgba(0, 255, 128, 0.35);
+  }
+
+  /* 声音关闭状态 */
+  .sound-btn.sound-off .sound-icon-on  { display: none; }
+  .sound-btn.sound-off .sound-icon-off { display: block; }
+  .sound-btn.sound-off {
+    color: #cc4444;
+    border-color: #cc4444;
+    box-shadow: 0 0 12px rgba(204, 68, 68, 0.2);
+  }
+  .sound-btn.sound-off:hover {
+    color: #ff5555;
+    border-color: #ff5555;
+    box-shadow: 0 0 18px rgba(255, 85, 85, 0.3);
+  }
+
+  /* 操作按钮行 */
+  .btn-row {
+    display: flex;
+    gap: 20px;
+  }
+
+  .btn {
+    padding: 16px 52px;
+    border: none;
+    border-radius: 12px;
+    font-size: 26px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.08em;
+  }
+  .btn:active { transform: scale(0.96); }
+
+  .btn-start {
+    background: linear-gradient(135deg, #00FF00, #00CC00);
+    color: #000;
+    box-shadow: 0 4px 20px rgba(0,255,0,0.3);
+  }
+  .btn-start:hover { box-shadow: 0 4px 28px rgba(0,255,0,0.5); }
+
+  .btn-pause {
+    background: linear-gradient(135deg, #FFFF00, #CCCC00);
+    color: #000;
+    box-shadow: 0 4px 20px rgba(255,255,0,0.3);
+  }
+
+  .btn-reset {
+    background: linear-gradient(135deg, #555577, #444466);
+    color: #ccc;
+    box-shadow: 0 4px 14px rgba(85,85,119,0.2);
+  }
+  .btn-reset:hover { background: linear-gradient(135deg, #666688, #555577); }
+
+  /* ========== 指针 ========== */
+  .pointer-layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+  }
+
+  .pointer-group {
+    transform-origin: 200px 200px;
+    transition: transform 0.25s linear;
+  }
+
+  /* ========== 底部刻度装饰 ========== */
+  .tick-marks {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ========== 拖拽手柄 ========== */
+  .resize-handle {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 32px;
+    height: 32px;
+    cursor: nwse-resize;
+    z-index: 100;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+  }
+
+  .resize-handle:hover {
+    opacity: 1;
+  }
+
+  .resize-handle svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ========== 作者标识 ========== */
+  .author-badge {
+    position: absolute;
+    right: 44px;
+    bottom: 24px;
+    font-size: 11px;
+    font-family: 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+    color: rgba(180, 180, 200, 0.55);
+    letter-spacing: 0.12em;
+    pointer-events: none;
+    z-index: 200;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    white-space: nowrap;
+    transition: color 0.5s;
+  }
+
+  /* ========== 手机竖屏适配 ========== */
+  @media (max-width: 767px) {
+    body {
+      overflow-y: auto;
+      align-items: flex-start;
+    }
+
+    .viewport {
+      aspect-ratio: auto !important;
+      width: 100vw !important;
+      min-height: 100vh;
+      height: auto !important;
+      overflow: visible;
+    }
+
+    .canvas {
+      position: relative !important;
+      width: 100% !important;
+      height: auto !important;
+      transform: none !important;
+      padding: 20px 0 28px;
+    }
+
+    .title {
+      font-size: 20px;
+      margin-bottom: 14px;
+      letter-spacing: 0.2em;
+    }
+
+    .clock-container {
+      width: min(68vw, 320px);
+      height: min(68vw, 320px);
+      flex-shrink: 0;
+    }
+
+    .overtime-label {
+      font-size: 18px;
+    }
+
+    .time-display {
+      font-size: clamp(36px, 14vw, 72px);
+    }
+
+    .controls {
+      margin-top: 18px;
+      gap: 14px;
+      padding: 0 16px;
+      width: 100%;
+    }
+
+    .time-set-row {
+      font-size: 15px;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .time-input {
+      width: 56px;
+      padding: 8px 4px;
+      font-size: 18px;
+      min-height: 44px;
+    }
+
+    .presets {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      max-width: 380px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .preset-btn {
+      padding: 8px 4px;
+      font-size: 14px;
+      min-height: 44px;
+      text-align: center;
+    }
+
+    .sound-btn {
+      width: 44px;
+      height: 44px;
+    }
+
+    .btn-row {
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn {
+      padding: 12px 28px;
+      font-size: 18px;
+      min-height: 44px;
+    }
+
+    .progress-ring__bg,
+    .progress-ring__fg {
+      stroke-width: 16;
+    }
+
+    .resize-handle {
+      display: none;
+    }
+
+    .preset-btn,
+    .btn,
+    .time-input,
+    .sound-btn {
+      touch-action: manipulation;
+    }
+
+    .author-badge {
+      font-size: 7px;
+      right: 12px;
+      bottom: 8px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- 16:9 视口容器 -->
+<div class="viewport" id="viewport">
+  <!-- 内部设计画布 1920x1080 -->
+  <div class="canvas" id="canvas">
+
+    <!-- 标题 -->
+    <div class="title">&#x23F1; 倒计时</div>
+
+    <!-- 轮盘 -->
+    <div class="clock-container">
+      <!-- 刻度装饰 SVG -->
+      <svg class="tick-marks" viewBox="0 0 400 400" id="tickSvg"></svg>
+
+      <!-- 进度环 SVG -->
+      <svg class="progress-ring" id="progressRingSvg" viewBox="0 0 400 400">
+        <circle class="progress-ring__bg"
+                cx="200" cy="200" r="180"/>
+        <circle class="progress-ring__fg"
+                id="progressRing"
+                cx="200" cy="200" r="180"/>
+      </svg>
+
+      <!-- 指针 SVG -->
+      <svg class="pointer-layer" viewBox="0 0 400 400">
+        <g class="pointer-group" id="pointerGroup">
+          <polygon points="200,32 195,175 200,168 205,175"
+                   fill="rgba(255,255,255,0.92)"
+                   filter="url(#pointerGlow)"/>
+          <circle cx="200" cy="200" r="8" fill="rgba(255,255,255,0.95)"/>
+          <circle cx="200" cy="200" r="4" fill="#0a0a1a"/>
+          <defs>
+            <filter id="pointerGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="2" result="blur"/>
+              <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+          </defs>
+        </g>
+      </svg>
+
+      <!-- 中心信息 -->
+      <div class="center-info">
+        <div class="overtime-label" id="overtimeLabel">已超时</div>
+        <div class="time-display" id="timeDisplay">02:00</div>
+      </div>
+    </div>
+
+    <!-- 控制区 -->
+    <div class="controls">
+      <!-- 自定义时间输入 -->
+      <div class="time-set-row">
+        <label>分钟</label>
+        <input type="number" class="time-input" id="inputMin" value="2" min="0" max="999">
+        <label>秒</label>
+        <input type="number" class="time-input" id="inputSec" value="0" min="0" max="59">
+      </div>
+
+      <!-- 预设按钮 -->
+      <div class="presets">
+        <button class="preset-btn" onclick="setPresetSeconds(2*60)">2分钟</button>
+        <button class="preset-btn" onclick="setPresetSeconds(3*60)">3分钟</button>
+        <button class="preset-btn" onclick="setPresetSeconds(7*60)">7分钟</button>
+        <button class="preset-btn" onclick="setPresetSeconds(10*60)">10分钟</button>
+        <button class="preset-btn" onclick="setPresetSeconds(15*60)">15分钟</button>
+        <button class="preset-btn" onclick="setPresetSeconds(30*60)">30分钟</button>
+        <button class="preset-btn" onclick="setPresetSeconds(60*60)">1小时</button>
+        <button class="preset-btn" onclick="setPresetSeconds(90*60)">1.5小时</button>
+        <button class="preset-btn" onclick="setPresetSeconds(120*60)">2小时</button>
+      </div>
+
+      <!-- 声音开关 -->
+      <div class="sound-toggle">
+        <button class="sound-btn sound-on" id="soundBtn" onclick="toggleSound()" title="声音开关">
+          <!-- 喇叭有声音图标 -->
+          <svg class="sound-icon-on" viewBox="0 0 24 24" width="26" height="26">
+            <polygon points="3,9 7,9 12,4 12,20 7,15 3,15" fill="currentColor"/>
+            <line x1="7" y1="9" x2="12" y2="4" stroke="currentColor" stroke-width="0.5" opacity="0"/>
+            <path d="M16,9a3,3 0 0 1 0,6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M19,6a7,7 0 0 1 0,12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <!-- 喇叭静音图标 -->
+          <svg class="sound-icon-off" viewBox="0 0 24 24" width="26" height="26">
+            <polygon points="3,9 7,9 12,4 12,20 7,15 3,15" fill="currentColor"/>
+            <line x1="22" y1="4" x2="4" y2="20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- 操作按钮 -->
+      <div class="btn-row">
+        <button class="btn btn-start" id="btnStart" onclick="startTimer()">开始</button>
+        <button class="btn btn-reset" id="btnReset" onclick="resetTimer()">重置</button>
+      </div>
+    </div>
+
+  </div><!-- /canvas -->
+
+  <!-- 作者标识 -->
+  <div class="author-badge" id="authorBadge">Gofy高飞团队制作出品</div>
+
+  <!-- 拖拽手柄 -->
+  <div class="resize-handle" id="resizeHandle" title="拖拽调整大小，双击恢复默认">
+    <svg viewBox="0 0 32 32" fill="none">
+      <line x1="20" y1="28" x2="28" y2="20" stroke="#8888bb" stroke-width="2" stroke-linecap="round"/>
+      <line x1="14" y1="28" x2="28" y2="14" stroke="#8888bb" stroke-width="2" stroke-linecap="round"/>
+      <line x1="8" y1="28" x2="28" y2="8" stroke="#8888bb" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+  </div>
+</div><!-- /viewport -->
+
+<script>
+  // ========== 缩放适配 ==========
+  const viewport = document.getElementById('viewport');
+  const canvas = document.getElementById('canvas');
+  const DESIGN_W = 1920;
+  const DESIGN_H = 1080;
+  const MIN_WIDTH = 480;
+
+  function isMobileMode() {
+    return window.innerWidth < 768;
+  }
+
+  function applyScale() {
+    if (isMobileMode()) return;
+    const vw = viewport.clientWidth;
+    const scale = vw / DESIGN_W;
+    canvas.style.transform = `scale(${scale})`;
+  }
+
+  function fitToScreen() {
+    if (isMobileMode()) {
+      viewport.style.width = '';
+      viewport.style.height = '';
+      canvas.style.transform = '';
+      return;
+    }
+    const screenW = window.innerWidth;
+    const screenH = window.innerHeight;
+    let w = Math.min(screenW, DESIGN_W);
+    let h = w * 9 / 16;
+    if (h > screenH) {
+      h = screenH;
+      w = h * 16 / 9;
+    }
+    viewport.style.width = Math.floor(w) + 'px';
+    viewport.style.height = '';
+    applyScale();
+  }
+
+  fitToScreen();
+  window.addEventListener('resize', () => {
+    if (isMobileMode()) {
+      fitToScreen();
+      return;
+    }
+    if (!manuallyResized) {
+      fitToScreen();
+    } else {
+      applyScale();
+    }
+  });
+  window.addEventListener('orientationchange', () => {
+    setTimeout(fitToScreen, 100);
+  });
+
+  // ========== 拖拽调整大小 ==========
+  const resizeHandle = document.getElementById('resizeHandle');
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragStartWidth = 0;
+  let manuallyResized = false;
+
+  function onDragStart(clientX, clientY) {
+    isDragging = true;
+    manuallyResized = true;
+    dragStartX = clientX;
+    dragStartY = clientY;
+    dragStartWidth = viewport.clientWidth;
+    document.body.style.cursor = 'nwse-resize';
+  }
+
+  function onDragMove(clientX, clientY) {
+    if (!isDragging) return;
+    const dx = clientX - dragStartX;
+    const dy = clientY - dragStartY;
+    const effectiveDx = dx + dy * (16 / 9);
+    let newWidth = dragStartWidth + effectiveDx;
+    newWidth = Math.max(MIN_WIDTH, Math.min(window.innerWidth, newWidth));
+    viewport.style.width = Math.floor(newWidth) + 'px';
+    applyScale();
+  }
+
+  function onDragEnd() {
+    if (!isDragging) return;
+    isDragging = false;
+    document.body.style.cursor = '';
+  }
+
+  resizeHandle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    onDragStart(e.clientX, e.clientY);
+  });
+  document.addEventListener('mousemove', (e) => onDragMove(e.clientX, e.clientY));
+  document.addEventListener('mouseup', onDragEnd);
+
+  resizeHandle.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const t = e.touches[0];
+    onDragStart(t.clientX, t.clientY);
+  }, { passive: false });
+  document.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    const t = e.touches[0];
+    onDragMove(t.clientX, t.clientY);
+  }, { passive: false });
+  document.addEventListener('touchend', onDragEnd);
+
+  resizeHandle.addEventListener('dblclick', () => {
+    manuallyResized = false;
+    fitToScreen();
+  });
+
+  // ========== 核心状态 ==========
+  let totalSeconds = 2 * 60;
+  let remainSeconds = totalSeconds;
+  let timerInterval = null;
+  let isRunning = false;
+  let audioCtx = null;
+  let isOvertime = false;
+  let overtimeSeconds = 0;
+  let alarmRepeatTimer = null;
+  let alarmStopTimer = null;
+  let soundEnabled = true;   // 声音开关：默认开启
+
+  // ========== DOM 引用 ==========
+  const ring           = document.getElementById('progressRing');
+  const display        = document.getElementById('timeDisplay');
+  const btnStart       = document.getElementById('btnStart');
+  const inputMin       = document.getElementById('inputMin');
+  const inputSec       = document.getElementById('inputSec');
+  const pointerGrp     = document.getElementById('pointerGroup');
+  const progressRingSvg = document.getElementById('progressRingSvg');
+  const overtimeLabel  = document.getElementById('overtimeLabel');
+  const authorBadge    = document.getElementById('authorBadge');
+  const soundBtn       = document.getElementById('soundBtn');
+
+  // ========== 进度环参数 ==========
+  const RADIUS = 180;
+  const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+  ring.style.strokeDasharray  = CIRCUMFERENCE;
+  ring.style.strokeDashoffset = 0;
+
+  // ========== 刻度装饰 ==========
+  (function drawTicks() {
+    const svg = document.getElementById('tickSvg');
+    const cx = 200, cy = 200, outerR = 196, innerR = 184;
+    for (let i = 0; i < 60; i++) {
+      const angle = (i / 60) * 2 * Math.PI - Math.PI / 2;
+      const isMajor = i % 5 === 0;
+      const r1 = isMajor ? innerR - 6 : innerR;
+      const r2 = outerR;
+      const x1 = cx + r1 * Math.cos(angle);
+      const y1 = cy + r1 * Math.sin(angle);
+      const x2 = cx + r2 * Math.cos(angle);
+      const y2 = cy + r2 * Math.sin(angle);
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', x1);
+      line.setAttribute('y1', y1);
+      line.setAttribute('x2', x2);
+      line.setAttribute('y2', y2);
+      line.setAttribute('stroke', isMajor ? '#555588' : '#2a2a50');
+      line.setAttribute('stroke-width', isMajor ? 2 : 1);
+      svg.appendChild(line);
+    }
+  })();
+
+  // ========== 工具函数 ==========
+
+  function formatTime(sec) {
+    const absSec = Math.abs(sec);
+    const h = Math.floor(absSec / 3600);
+    const m = Math.floor((absSec % 3600) / 60);
+    const s = absSec % 60;
+    if (h > 0) {
+      return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    }
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+
+  function getProgressColor(ratio) {
+    let r, g, b;
+    if (ratio > 0.5) {
+      const t = (1 - ratio) / 0.5;
+      r = Math.round(t * 255);
+      g = 255;
+      b = 0;
+    } else {
+      const t = (0.5 - ratio) / 0.5;
+      r = 255;
+      g = Math.round(255 - t * 255);
+      b = 0;
+    }
+    return `rgb(${r},${g},${b})`;
+  }
+
+  function getBackgroundThresholds() {
+    const totalMin = totalSeconds / 60;
+    if (totalMin < 3) {
+      return { green: 60, yellow: 30 };
+    } else if (totalMin <= 10) {
+      return { green: 120, yellow: 60 };
+    } else if (totalMin <= 30) {
+      return { green: 300, yellow: 120 };
+    } else {
+      return { green: 600, yellow: 300 };
+    }
+  }
+
+  function updateBackgroundColor() {
+    const controls = document.querySelector('.controls');
+    const title = document.querySelector('.title');
+    if (isOvertime) {
+      viewport.style.background = '#FF0000';
+      display.style.color = '#FFFFFF';
+      controls.style.color = '#FFFFFF';
+      title.style.color = '#FFFFFF';
+      authorBadge.style.color = 'rgba(255,255,255,0.5)';
+      return;
+    }
+    if (!isRunning && remainSeconds === totalSeconds) {
+      viewport.style.background = '#0a0a1a';
+      display.style.color = '#FFFFFF';
+      controls.style.color = '#9999bb';
+      title.style.color = '#8888aa';
+      authorBadge.style.color = 'rgba(180,180,200,0.55)';
+      return;
+    }
+
+    const th = getBackgroundThresholds();
+    if (remainSeconds > th.green) {
+      viewport.style.background = '#0a0a1a';
+      display.style.color = '#FFFFFF';
+      controls.style.color = '#9999bb';
+      title.style.color = '#8888aa';
+      authorBadge.style.color = 'rgba(180,180,200,0.55)';
+    } else if (remainSeconds > th.yellow) {
+      viewport.style.background = '#00FF00';
+      display.style.color = '#000000';
+      controls.style.color = '#000000';
+      title.style.color = '#003300';
+      authorBadge.style.color = 'rgba(0,80,0,0.5)';
+    } else if (remainSeconds > 0) {
+      viewport.style.background = '#FFFF00';
+      display.style.color = '#000000';
+      controls.style.color = '#000000';
+      title.style.color = '#666600';
+      authorBadge.style.color = 'rgba(80,80,0,0.5)';
+    } else {
+      viewport.style.background = '#FF0000';
+      display.style.color = '#FFFFFF';
+      controls.style.color = '#FFFFFF';
+      title.style.color = '#FFFFFF';
+      authorBadge.style.color = 'rgba(255,255,255,0.5)';
+    }
+  }
+
+  function updateDisplay() {
+    const ratio = totalSeconds > 0 ? remainSeconds / totalSeconds : 0;
+    const displayRatio = isOvertime ? 0 : Math.max(0, ratio);
+
+    const offset = CIRCUMFERENCE * (1 - displayRatio);
+    ring.style.strokeDashoffset = offset;
+    ring.style.stroke = isOvertime ? '#FF0000' : getProgressColor(displayRatio);
+
+    const angle = isOvertime ? 360 : (1 - ratio) * 360;
+    pointerGrp.style.transform = `rotate(${angle}deg)`;
+
+    progressRingSvg.style.transform = `rotate(${-90 + angle}deg)`;
+
+    if (isOvertime) {
+      display.textContent = '-' + formatTime(overtimeSeconds);
+      overtimeLabel.classList.add('show');
+      display.classList.add('done');
+      display.classList.remove('flash');
+    } else {
+      display.textContent = formatTime(remainSeconds);
+      overtimeLabel.classList.remove('show');
+      display.classList.remove('done');
+
+      if (remainSeconds <= 10 && remainSeconds > 0 && isRunning) {
+        display.classList.add('flash');
+      } else {
+        display.classList.remove('flash');
+      }
+    }
+
+    updateBackgroundColor();
+  }
+
+  function readInputSeconds() {
+    const m = Math.max(0, parseInt(inputMin.value) || 0);
+    const s = Math.max(0, Math.min(59, parseInt(inputSec.value) || 0));
+    return m * 60 + s;
+  }
+
+  function setPreset(minutes) {
+    if (isRunning) return;
+    if (isOvertime) return;
+    inputMin.value = minutes;
+    inputSec.value = 0;
+    totalSeconds = minutes * 60;
+    remainSeconds = totalSeconds;
+    updateDisplay();
+  }
+
+  function setPresetSeconds(seconds) {
+    if (isRunning) return;
+    if (isOvertime) return;
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    inputMin.value = m;
+    inputSec.value = s;
+    totalSeconds = seconds;
+    remainSeconds = totalSeconds;
+    updateDisplay();
+  }
+
+  // ========== 声音开关 ==========
+
+  function toggleSound() {
+    soundEnabled = !soundEnabled;
+    if (soundEnabled) {
+      soundBtn.classList.remove('sound-off');
+      soundBtn.classList.add('sound-on');
+      soundBtn.title = '声音已开启 - 点击关闭';
+      // 如果正在超时状态且运行中，重新启动响铃
+      if (isOvertime && isRunning && !alarmRepeatTimer) {
+        if (audioCtx) { audioCtx.resume(); }
+        startOvertimeAlarm();
+      }
+    } else {
+      soundBtn.classList.remove('sound-on');
+      soundBtn.classList.add('sound-off');
+      soundBtn.title = '声音已关闭 - 点击开启';
+      // 立即停止响铃 + 杀死当前播放的音频
+      stopAlarm();
+      if (audioCtx) { audioCtx.suspend(); }
+    }
+  }
+
+  // ========== 计时控制 ==========
+
+  function startTimer() {
+    if (isOvertime && !isRunning) {
+      isRunning = true;
+      btnStart.textContent = '暂停';
+      btnStart.className = 'btn btn-pause';
+      timerInterval = setInterval(tick, 1000);
+      return;
+    }
+
+    if (isRunning) {
+      pauseTimer();
+      return;
+    }
+
+    if (remainSeconds <= 0) {
+      totalSeconds = readInputSeconds();
+      remainSeconds = totalSeconds;
+    }
+    if (remainSeconds <= 0) return;
+
+    isRunning = true;
+    display.classList.remove('done');
+    overtimeLabel.classList.remove('show');
+    btnStart.textContent = '暂停';
+    btnStart.className = 'btn btn-pause';
+
+    timerInterval = setInterval(tick, 1000);
+    updateDisplay();
+  }
+
+  function tick() {
+    if (!isOvertime) {
+      remainSeconds--;
+      if (remainSeconds <= 0) {
+        remainSeconds = 0;
+        isOvertime = true;
+        overtimeSeconds = 0;
+        onTimerEnd();
+      }
+    } else {
+      overtimeSeconds++;
+    }
+    updateDisplay();
+  }
+
+  function pauseTimer() {
+    isRunning = false;
+    clearInterval(timerInterval);
+    timerInterval = null;
+    stopAlarm();
+    btnStart.textContent = '继续';
+    btnStart.className = 'btn btn-start';
+    display.classList.remove('flash');
+  }
+
+  function resetTimer() {
+    isRunning = false;
+    isOvertime = false;
+    overtimeSeconds = 0;
+    clearInterval(timerInterval);
+    timerInterval = null;
+    stopAlarm();
+
+    ring.style.transition = 'none';
+    progressRingSvg.style.transition = 'none';
+    pointerGrp.style.transition = 'none';
+
+    viewport.style.background = '#0a0a1a';
+    display.classList.remove('done', 'flash');
+    overtimeLabel.classList.remove('show');
+    btnStart.textContent = '开始';
+    btnStart.className = 'btn btn-start';
+
+    totalSeconds = readInputSeconds();
+    remainSeconds = totalSeconds;
+    updateDisplay();
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        ring.style.transition = '';
+        progressRingSvg.style.transition = '';
+        pointerGrp.style.transition = '';
+      });
+    });
+  }
+
+  function onTimerEnd() {
+    display.classList.remove('flash');
+    display.classList.add('done');
+    btnStart.textContent = '暂停';
+    btnStart.className = 'btn btn-pause';
+    // 只在声音开启时才播放警报
+    if (soundEnabled) {
+      startOvertimeAlarm();
+    }
+  }
+
+  // ========== 超时响铃 ==========
+
+  function getAlarmDuration() {
+    const totalMin = totalSeconds / 60;
+    if (totalMin < 3) return 15000;
+    if (totalMin <= 10) return 30000;
+    return 30000;
+  }
+
+  function startOvertimeAlarm() {
+    if (!soundEnabled) return;
+    playAlarm();
+    alarmRepeatTimer = setInterval(() => {
+      playAlarm();
+    }, 3000);
+    const duration = getAlarmDuration();
+    alarmStopTimer = setTimeout(() => {
+      stopAlarm();
+    }, duration);
+  }
+
+  function stopAlarm() {
+    if (alarmRepeatTimer) {
+      clearInterval(alarmRepeatTimer);
+      alarmRepeatTimer = null;
+    }
+    if (alarmStopTimer) {
+      clearTimeout(alarmStopTimer);
+      alarmStopTimer = null;
+    }
+    // 立即杀死当前正在播放的音频（suspend 比 close 温和，可恢复）
+    if (audioCtx && audioCtx.state === 'running') {
+      audioCtx.suspend();
+    }
+  }
+
+  // ========== Web Audio API 提示音 ==========
+
+  function getAudioCtx() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    // 如果之前被 suspend 了（静音/停止），自动恢复
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    return audioCtx;
+  }
+
+  function beep(freq, startTime, duration) {
+    const ctx = getAudioCtx();
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.6, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(startTime);
+    osc.stop(startTime + duration);
+  }
+
+  function playAlarm() {
+    if (!soundEnabled) return;
+    const ctx = getAudioCtx();
+    let t = ctx.currentTime + 0.1;
+    for (let group = 0; group < 3; group++) {
+      for (let i = 0; i < 3; i++) {
+        beep(880 + group * 110, t, 0.18);
+        t += 0.22;
+      }
+      t += 0.35;
+    }
+  }
+
+  // ========== 输入框联动 ==========
+  inputMin.addEventListener('change', () => { if (!isRunning && !isOvertime) { totalSeconds = readInputSeconds(); remainSeconds = totalSeconds; updateDisplay(); } });
+  inputSec.addEventListener('change', () => { if (!isRunning && !isOvertime) { totalSeconds = readInputSeconds(); remainSeconds = totalSeconds; updateDisplay(); } });
+
+  // ========== 初始化显示 ==========
+  updateDisplay();
+</script>
+</body>
+</html>
