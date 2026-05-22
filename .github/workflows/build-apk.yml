@@ -63,65 +63,70 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 
-          # 修复：NDK r28c 与 SDL2 不兼容，用 r25c 伪装成 r28c
+          # 淇锛歂DK r28c 涓?SDL2 涓嶅吋瀹癸紝鐢?r25c 浼鎴?r28c
           NDK25="$HOME/.buildozer/android/platform/android-ndk-r25c"
           NDK28="$HOME/.buildozer/android/platform/android-ndk-r28c"
           if [ ! -d "$NDK25" ]; then
-            echo "=== 下载 NDK r25c ==="
+            echo "=== 涓嬭浇 NDK r25c ==="
             wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip -O /tmp/ndk.zip
             mkdir -p "$HOME/.buildozer/android/platform"
             unzip -q /tmp/ndk.zip -d "$HOME/.buildozer/android/platform"
             rm /tmp/ndk.zip
           fi
-          # 创建符号链接：让 buildozer "以为" r28c 已存在（实际指向 r25c）
-          rm -rf "$NDK28" 2>/dev/null || true
+          # 鍒涘缓绗﹀彿閾炬帴锛氳 buildozer "浠ヤ负" r28c 宸插瓨鍦紙瀹為檯鎸囧悜 r25c锛?          rm -rf "$NDK28" 2>/dev/null || true
           ln -s "$NDK25" "$NDK28"
-          echo "=== NDK 链接创建完成 ==="
+          echo "=== NDK 閾炬帴鍒涘缓瀹屾垚 ==="
           ls -la "$HOME/.buildozer/android/platform/" | grep ndk
 
-          # 彻底清理旧缓存，确保 p4a develop 分支和 cython<3.0 生效
-          echo "=== 彻底清理编译缓存 ==="
+          # 褰诲簳娓呯悊鏃х紦瀛橈紝纭繚 p4a develop 鍒嗘敮鍜?cython<3.0 鐢熸晥
+          echo "=== 褰诲簳娓呯悊缂栬瘧缂撳瓨 ==="
           rm -rf "$HOME/.buildozer/android/platform/build-"* 2>/dev/null || true
           rm -rf "$HOME/.buildozer/android/platform/python-for-android" 2>/dev/null || true
           rm -rf ./.buildozer 2>/dev/null || true
-          echo "=== 缓存清理完成 ==="
+          echo "=== 缂撳瓨娓呯悊瀹屾垚 ==="
 
-          # 第一次编译（下载SDK/NDK，许可可能未被接受）
+          # 鎵嬪姩 clone p4a develop 鍒嗘敮锛坆uildozer 涓嶅皧閲?spec 閲岀殑 p4a.branch锛?          echo "=== 鎵嬪姩 clone p4a develop 鍒嗘敮 ==="
+          git clone -b develop --single-branch --depth 1 \
+            https://github.com/kivy/python-for-android.git \
+            "$HOME/.buildozer/android/platform/python-for-android"
+          echo "=== p4a develop clone 瀹屾垚 ==="
+
+          # 绗竴娆＄紪璇戯紙涓嬭浇SDK/NDK锛岃鍙彲鑳芥湭琚帴鍙楋級
           set +o pipefail
           buildozer android debug 2>&1 | tee buildozer.log
           set -o pipefail
 
-          # 检查APK是否真的产出了（buildozer退出码不可靠）
+          # 妫€鏌PK鏄惁鐪熺殑浜у嚭浜嗭紙buildozer閫€鍑虹爜涓嶅彲闈狅級
           APK_FILE=$(find . -name "*.apk" -not -path "*/.buildozer/*" 2>/dev/null | head -1)
 
           if [ -z "$APK_FILE" ]; then
-            echo "=== 无APK产出，接受SDK许可后重试 ==="
+            echo "=== 鏃燗PK浜у嚭锛屾帴鍙桽DK璁稿彲鍚庨噸璇?==="
             SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
 
-            # 尝试多个可能的sdkmanager路径
+            # 灏濊瘯澶氫釜鍙兘鐨剆dkmanager璺緞
             for SM in \
               "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
               "$SDK_ROOT/tools/bin/sdkmanager"; do
               if [ -f "$SM" ]; then
-                echo "找到sdkmanager: $SM"
+                echo "鎵惧埌sdkmanager: $SM"
                 yes | $SM --licenses --sdk_root="$SDK_ROOT" 2>&1 || true
               fi
             done
 
-            echo "=== 重试编译 ==="
+            echo "=== 閲嶈瘯缂栬瘧 ==="
             buildozer android debug 2>&1 | tee -a buildozer.log
           fi
 
-          # 最终检查APK是否存在
+          # 鏈€缁堟鏌PK鏄惁瀛樺湪
           APK_FILE=$(find . -name "*.apk" -not -path "*/.buildozer/*" 2>/dev/null | head -1)
           if [ -n "$APK_FILE" ]; then
             echo "BUILD_EXIT=0" >> $GITHUB_OUTPUT
-            echo "APK产出: $APK_FILE"
+            echo "APK浜у嚭: $APK_FILE"
             ls -lh "$APK_FILE"
             exit 0
           else
             echo "BUILD_EXIT=1" >> $GITHUB_OUTPUT
-            echo "错误：仍未找到APK！"
+            echo "閿欒锛氫粛鏈壘鍒癆PK锛?
             exit 1
           fi
         shell: bash
@@ -151,5 +156,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: 倒计时轮盘-APK
+          name: 鍊掕鏃惰疆鐩?APK
           path: ${{ steps.find_apk.outputs.apk_path }}
