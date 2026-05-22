@@ -52,9 +52,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.buildozer
-          key: buildozer-cache-v5-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          key: buildozer-cache-v6-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
           restore-keys: |
-            buildozer-cache-v5-${{ runner.os }}-
+            buildozer-cache-v6-${{ runner.os }}-
 
       - name: Build APK
         id: build
@@ -63,70 +63,72 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 
-          # 淇锛歂DK r28c 涓?SDL2 涓嶅吋瀹癸紝鐢?r25c 浼鎴?r28c
+          # Fix: NDK r28c incompatible with SDL2, use r25c symlink disguised as r28c
           NDK25="$HOME/.buildozer/android/platform/android-ndk-r25c"
           NDK28="$HOME/.buildozer/android/platform/android-ndk-r28c"
           if [ ! -d "$NDK25" ]; then
-            echo "=== 涓嬭浇 NDK r25c ==="
+            echo "=== Downloading NDK r25c ==="
             wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip -O /tmp/ndk.zip
             mkdir -p "$HOME/.buildozer/android/platform"
             unzip -q /tmp/ndk.zip -d "$HOME/.buildozer/android/platform"
             rm /tmp/ndk.zip
           fi
-          # 鍒涘缓绗﹀彿閾炬帴锛氳 buildozer "浠ヤ负" r28c 宸插瓨鍦紙瀹為檯鎸囧悜 r25c锛?          rm -rf "$NDK28" 2>/dev/null || true
+          # Create symlink: buildozer thinks r28c exists (actually points to r25c)
+          rm -rf "$NDK28" 2>/dev/null || true
           ln -s "$NDK25" "$NDK28"
-          echo "=== NDK 閾炬帴鍒涘缓瀹屾垚 ==="
+          echo "=== NDK symlink created ==="
           ls -la "$HOME/.buildozer/android/platform/" | grep ndk
 
-          # 褰诲簳娓呯悊鏃х紦瀛橈紝纭繚 p4a develop 鍒嗘敮鍜?cython<3.0 鐢熸晥
-          echo "=== 褰诲簳娓呯悊缂栬瘧缂撳瓨 ==="
+          # Clean old caches to ensure p4a develop branch and cython<3.0 take effect
+          echo "=== Cleaning build caches ==="
           rm -rf "$HOME/.buildozer/android/platform/build-"* 2>/dev/null || true
           rm -rf "$HOME/.buildozer/android/platform/python-for-android" 2>/dev/null || true
           rm -rf ./.buildozer 2>/dev/null || true
-          echo "=== 缂撳瓨娓呯悊瀹屾垚 ==="
+          echo "=== Cache cleanup done ==="
 
-          # 鎵嬪姩 clone p4a develop 鍒嗘敮锛坆uildozer 涓嶅皧閲?spec 閲岀殑 p4a.branch锛?          echo "=== 鎵嬪姩 clone p4a develop 鍒嗘敮 ==="
+          # Manually clone p4a develop branch (buildozer ignores p4a.branch in spec)
+          echo "=== Cloning p4a develop branch ==="
           git clone -b develop --single-branch --depth 1 \
             https://github.com/kivy/python-for-android.git \
             "$HOME/.buildozer/android/platform/python-for-android"
-          echo "=== p4a develop clone 瀹屾垚 ==="
+          echo "=== p4a develop clone done ==="
 
-          # 绗竴娆＄紪璇戯紙涓嬭浇SDK/NDK锛岃鍙彲鑳芥湭琚帴鍙楋級
+          # First build attempt (SDK/NDK download, license may not be accepted yet)
           set +o pipefail
           buildozer android debug 2>&1 | tee buildozer.log
           set -o pipefail
 
-          # 妫€鏌PK鏄惁鐪熺殑浜у嚭浜嗭紙buildozer閫€鍑虹爜涓嶅彲闈狅級
+          # Check if APK was actually produced (buildozer exit code is unreliable)
           APK_FILE=$(find . -name "*.apk" -not -path "*/.buildozer/*" 2>/dev/null | head -1)
 
           if [ -z "$APK_FILE" ]; then
-            echo "=== 鏃燗PK浜у嚭锛屾帴鍙桽DK璁稿彲鍚庨噸璇?==="
+            echo "=== No APK found, accepting SDK licenses and retrying ==="
             SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
 
-            # 灏濊瘯澶氫釜鍙兘鐨剆dkmanager璺緞
+            # Try multiple possible sdkmanager paths
             for SM in \
               "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
               "$SDK_ROOT/tools/bin/sdkmanager"; do
               if [ -f "$SM" ]; then
-                echo "鎵惧埌sdkmanager: $SM"
+                echo "Found sdkmanager: $SM"
                 yes | $SM --licenses --sdk_root="$SDK_ROOT" 2>&1 || true
               fi
             done
 
-            echo "=== 閲嶈瘯缂栬瘧 ==="
+            echo "=== Retrying build ==="
             buildozer android debug 2>&1 | tee -a buildozer.log
           fi
 
-          # 鏈€缁堟鏌PK鏄惁瀛樺湪
+          # Final check for APK
           APK_FILE=$(find . -name "*.apk" -not -path "*/.buildozer/*" 2>/dev/null | head -1)
           if [ -n "$APK_FILE" ]; then
             echo "BUILD_EXIT=0" >> $GITHUB_OUTPUT
-            echo "APK浜у嚭: $APK_FILE"
+            echo "APK produced: $APK_FILE"
             ls -lh "$APK_FILE"
             exit 0
           else
             echo "BUILD_EXIT=1" >> $GITHUB_OUTPUT
-            echo "閿欒锛氫粛鏈壘鍒癆PK锛?
+            echo "ERROR: APK not found after build!"
             exit 1
           fi
         shell: bash
@@ -156,5 +158,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: 鍊掕鏃惰疆鐩?APK
+          name: countdown-wheel-APK
           path: ${{ steps.find_apk.outputs.apk_path }}
