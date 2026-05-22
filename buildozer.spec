@@ -15,7 +15,10 @@ version = 1.0
 version.code = 1
 
 # 应用要求
-requirements = python3,kivy
+requirements = python3,kivy,cython<3.0
+
+# p4a 使用 develop 分支（修复 HIDDeviceManager 与 Cython 3.x 兼容问题）
+p4a.branch = develop
 
 # 图标（需要自行添加）
 
