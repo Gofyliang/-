@@ -3,32 +3,44 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Clock outer ring -->
+    <!-- Deep blue outer ring (r=40, stroke=6) -->
     <path
-        android:fillColor="#FFFFFF"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3"
-        android:pathData="M54,30a24,24 0,1 1,0 48a24,24 0,1 1,0 -48z"
-        android:fillAlpha="0"/>
-    <!-- Clock tick marks - top, right, bottom, left -->
-    <path android:strokeColor="#FFFFFF" android:strokeWidth="3" android:pathData="M54,33v4"/>
-    <path android:strokeColor="#FFFFFF" android:strokeWidth="3" android:pathData="M54,71v4"/>
-    <path android:strokeColor="#FFFFFF" android:strokeWidth="3" android:pathData="M33,54h-4"/>
-    <path android:strokeColor="#FFFFFF" android:strokeWidth="3" android:pathData="M71,54h4"/>
-    <!-- Hour hand (shorter, thicker) -->
+        android:fillColor="#00000000"
+        android:strokeColor="#0B3D7B"
+        android:strokeWidth="6"
+        android:pathData="M54,14a40,40 0,1 1,0 80a40,40 0,1 1,0 -80z"/>
+    <!-- Clock face fill (r=34) -->
     <path
-        android:strokeColor="#FFFFFF"
+        android:fillColor="#0B3D7B"
+        android:pathData="M54,20a34,34 0,1 1,0 68a34,34 0,1 1,0 -68z"/>
+    <!-- Green clock ring (r=34, stroke=6) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#00AA44"
+        android:strokeWidth="6"
+        android:pathData="M54,20a34,34 0,1 1,0 68a34,34 0,1 1,0 -68z"/>
+    <!-- Hour hand - yellow, stroke=4 -->
+    <path
+        android:strokeColor="#FFD700"
         android:strokeWidth="4"
         android:strokeLineCap="round"
-        android:pathData="M54,54L54,40"/>
-    <!-- Minute hand (longer, thinner) -->
+        android:pathData="M54,54L54,36"/>
+    <!-- Minute hand - red, stroke=3 -->
     <path
-        android:strokeColor="#FF6B6B"
+        android:strokeColor="#FF4444"
         android:strokeWidth="3"
         android:strokeLineCap="round"
-        android:pathData="M54,54L68,48"/>
-    <!-- Center dot -->
+        android:pathData="M54,54L72,46"/>
+    <!-- Center dot (r=8) -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,54m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0"/>
+        android:fillColor="#00AA44"
+        android:pathData="M54,54m-8,0a8,8 0,1 1,16 0a8,8 0,1 1,-16 0"/>
+    <!-- Letter A - Android version -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#0B3D7B"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M100,102 L92,120 M100,102 L104,120 M94,114 L102,114"/>
 </vector>
